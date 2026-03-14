@@ -1,36 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 pub fn load_auth() -> Result<OpenCodeAuth, String> {
-    if let Ok(path) = auth_path() {
-        if let Ok(text) = fs::read_to_string(&path) {
-            if let Ok(auth) = serde_json::from_str::<OpenCodeAuth>(&text) {
-                return Ok(auth);
-            }
-        }
-    }
+    let path = auth_path()?;
 
-    let keychain_data = read_from_keychain()?;
-    let auth: OpenCodeAuth = serde_json::from_str(&keychain_data)
-        .map_err(|e| format!("Could not parse OpenCode auth JSON: {}", e))?;
+    let text = fs::read_to_string(&path).map_err(|e| format!("Could not read auth file: {}", e))?;
+
+    let auth: OpenCodeAuth =
+        serde_json::from_str(&text).map_err(|e| format!("Could not parse auth JSON: {}", e))?;
+
+    if auth.opencode.is_none() {
+        return Err("No OpenCode token found".to_string());
+    }
 
     Ok(auth)
-}
-
-fn read_from_keychain() -> Result<String, String> {
-    let output = Command::new("security")
-        .args(["find-generic-password", "-s", "OpenCode", "-w"])
-        .output()
-        .map_err(|e| format!("Failed to read keychain: {}", e))?;
-
-    if !output.status.success() {
-        return Err("OpenCode keychain entry not found".to_string());
-    }
-
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok(text)
 }
 
 fn auth_path() -> Result<PathBuf, String> {
@@ -48,6 +32,44 @@ fn auth_path() -> Result<PathBuf, String> {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct OpenCodeAuth {
-    #[serde(flatten)]
-    pub extra: serde_json::Value,
+    #[serde(rename = "opencode")]
+    pub opencode: Option<OpenCodeToken>,
+    #[serde(rename = "google")]
+    pub google: Option<GoogleToken>,
+    #[serde(rename = "github-copilot")]
+    pub github_copilot: Option<CopilotToken>,
+    #[serde(rename = "openai")]
+    pub openai: Option<OpenAIToken>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OpenCodeToken {
+    #[serde(rename = "type")]
+    pub token_type: Option<String>,
+    pub key: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct GoogleToken {
+    #[serde(rename = "type")]
+    pub token_type: Option<String>,
+    pub refresh: Option<String>,
+    pub access: Option<String>,
+    pub expires: Option<i64>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct CopilotToken {
+    #[serde(rename = "type")]
+    pub token_type: Option<String>,
+    pub refresh: Option<String>,
+    pub access: Option<String>,
+    pub expires: Option<i64>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OpenAIToken {
+    #[serde(rename = "type")]
+    pub token_type: Option<String>,
+    pub access: Option<String>,
 }

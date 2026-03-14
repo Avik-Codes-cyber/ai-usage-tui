@@ -279,4 +279,56 @@ impl App {
             value: "opencode stats".to_string(),
         });
     }
+
+    pub fn add_opencode_usage_from_output(&mut self, output: &str) {
+        self.is_loading = false;
+
+        for line in output.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            // Try to parse lines like "Chat: 45,000 tokens" or "$1.23 spent"
+            if line.contains(':') {
+                let parts: Vec<&str> = line.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let label = parts[0].trim().to_string();
+                    let value = parts[1].trim().to_string();
+
+                    // Check if it's a percentage or has a number
+                    if value.contains('%') {
+                        if let Ok(pct) = value.replace('%', "").trim().parse::<f64>() {
+                            self.usage_lines.push(UsageLine::Progress {
+                                label: label.clone(),
+                                used: pct,
+                                total: 100.0,
+                                resets_at: None,
+                            });
+                            self.usage_lines.push(UsageLine::Graph {
+                                label,
+                                percentage: pct,
+                            });
+                            continue;
+                        }
+                    }
+
+                    self.usage_lines.push(UsageLine::Text { label, value });
+                }
+            } else {
+                self.usage_lines.push(UsageLine::Text {
+                    label: "Info".to_string(),
+                    value: line.to_string(),
+                });
+            }
+        }
+
+        if self.usage_lines.is_empty() {
+            self.usage_lines.push(UsageLine::Badge {
+                label: "Status".to_string(),
+                value: "No usage data".to_string(),
+                color: Some("#a3a3a3"),
+            });
+        }
+    }
 }

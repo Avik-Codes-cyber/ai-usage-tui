@@ -171,20 +171,45 @@ fn run_copilot(app: &mut App, headless: bool) -> Result<(), Box<dyn std::error::
 }
 
 fn run_opencode(app: &mut App, headless: bool) -> Result<(), Box<dyn std::error::Error>> {
-    match auth::load_opencode_auth() {
-        Ok(auth) => {
-            if headless {
-                println!("OpenCode stats: run `opencode stats`");
-                return Ok(());
+    // Try to load auth first
+    let auth_loaded = auth::load_opencode_auth().is_ok();
+
+    // Try running opencode stats
+    let output = std::process::Command::new("opencode")
+        .args(["stats", "--days", "30"])
+        .output();
+
+    match output {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                if headless {
+                    println!("━━━ OpenCode Usage ━━━");
+                    println!("{}", stdout);
+                    println!("━━━━━━━━━━━━━━━━━━━━");
+                    return Ok(());
+                }
+                app.add_opencode_usage_from_output(&stdout);
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if headless {
+                    eprintln!("Error running opencode: {}", stderr);
+                    std::process::exit(1);
+                }
+                if !auth_loaded {
+                    app.error = Some("OpenCode not logged in".to_string());
+                } else {
+                    app.error = Some(format!("OpenCode error: {}", stderr));
+                }
+                app.is_loading = false;
             }
-            app.add_opencode_usage(&auth);
         }
         Err(e) => {
             if headless {
-                eprintln!("Error loading OpenCode credentials: {}", e);
+                eprintln!("OpenCode CLI not found: {}", e);
                 std::process::exit(1);
             }
-            app.error = Some(e);
+            app.error = Some("OpenCode CLI not found".to_string());
             app.is_loading = false;
         }
     }
