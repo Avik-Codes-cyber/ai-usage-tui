@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 dirs = "6.0.0"
+dotenvy = "0.15.7"
 ratatui = "0.30.0"
 reqwest = "0.13.2"
 serde = "1.0.228"
